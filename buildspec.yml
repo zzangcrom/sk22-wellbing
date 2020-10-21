@@ -2,7 +2,7 @@ version: 0.2
 
 env:
   variables:
-    _PROJECT_NAME: "wellbing"
+    _PROJECT_NAME: "skccuser22-wellbing"
 
 phases:
   install:
