@@ -14,16 +14,16 @@ public class Eat {
     private Long number;
     private String status;
 
-    @PrePersist
-    public void onPrePersist(){
+    @PostPersist
+    public void onPostPersist(){
         GoodEaten goodEaten = new GoodEaten();
         BeanUtils.copyProperties(this, goodEaten);
         goodEaten.publishAfterCommit();
 
     }
 
-    @PostPersist
-    public void onPostPersist(){
+    @PrePersist
+    public void onPrePersist(){
         BadEaten badEaten = new BadEaten();
         BeanUtils.copyProperties(this, badEaten);
         badEaten.publishAfterCommit();
