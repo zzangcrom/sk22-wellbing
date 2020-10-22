@@ -134,11 +134,11 @@ CNA 개발에 요구되는 체크포인트를 만족하기 위하여 분석/설�
 
 ### 개인과제 모델 추가
 
-![image](https://user-images.githubusercontent.com/23253192/96823533-a8bbd080-1467-11eb-9ef3-e6134c5d14d4.JPG)
+![image](https://user-images.githubusercontent.com/70302925/96826152-b7a58180-146d-11eb-85a4-aedda7c6eca5.png)
 
-- health 서비스와 point 서비스간 동기 / 비동기식 호출 추가 구현
+- wellbing 서비스와 point 서비스간 동기 / 비동기식 호출 추가 구현
 - Eventual Consistency 방식에 대한 SAGA 패턴 적용
-- health 서비스의 트랜잭션을 customercenter의 mypage view에서 볼 수 있도록 CQRS 적용
+- wellbing 서비스의 트랜잭션을 customercenter의 mypage view에서 볼 수 있도록 CQRS 적용
 
 ## 헥사고날 아키텍처 다이어그램 도출
     
@@ -169,7 +169,7 @@ cd customercenter
 mvn spring-boot:run  
 
 
-cd health
+cd wellbing
 mvn spring-boot:run 
 ```
 
@@ -178,46 +178,45 @@ mvn spring-boot:run
 - 각 서비스내에 도출된 핵심 Aggregate Root 객체를 Entity 로 선언하였다: (예시는 point 마이크로 서비스). 이때 가능한 현업에서 사용하는 언어 (유비쿼터스 랭귀지)를 그대로 사용하려고 노력했다. 하지만, 일부 구현에 있어서 영문이 아닌 경우는 실행이 불가능한 경우가 있기 때문에 계속 사용할 방법은 아닌것 같다. (Maven pom.xml, Kafka의 topic id, FeignClient 의 서비스 id 등은 한글로 식별자를 사용하는 경우 오류가 발생하는 것을 확인하였다)
 
 ```
-package nosmoke;
+package nosmokes;
 
 import javax.persistence.*;
 import org.springframework.beans.BeanUtils;
 import java.util.List;
 
 @Entity
-@Table(name="Health_table")
-public class Health {
+@Table(name="Eat_table")
+public class Eat {
 
     @Id
     @GeneratedValue(strategy=GenerationType.AUTO)
     private Long id;
-    private Long point;
+    private Long number;
     private String status;
 
     @PostPersist
     public void onPostPersist(){
-        Runed runed = new Runed();
-        BeanUtils.copyProperties(this, runed);
-        runed.publishAfterCommit();
+        GoodEaten goodEaten = new GoodEaten();
+        BeanUtils.copyProperties(this, goodEaten);
+        goodEaten.publishAfterCommit();
+
+    }
+
+    @PrePersist
+    public void onPrePersist(){
+        BadEaten badEaten = new BadEaten();
+        BeanUtils.copyProperties(this, badEaten);
+        badEaten.publishAfterCommit();
 
         //Following code causes dependency to external APIs
         // it is NOT A GOOD PRACTICE. instead, Event-Policy mapping is recommended.
 
-        nosmoke.external.Earn earn = new nosmoke.external.Earn();
+        nosmokes.external.Deduct deduct = new nosmokes.external.Deduct();
         // mappings goes here
-        earn.setPoint(this.getPoint());
-        earn.setHealthId(this.getId());
-        HealthApplication.applicationContext.getBean(nosmoke.external.EarnService.class)
-            .healthy(earn);
-
-
-    }
-
-    @PostUpdate
-    public void onPostUpdate(){
-        Died died = new Died();
-        BeanUtils.copyProperties(this, died);
-        died.publishAfterCommit();
+        deduct.setPoint(this.getNumber());
+        deduct.setPayId(this.getId());
+        WellbingApplication.applicationContext.getBean(nosmokes.external.DeductService.class)
+                .pay(deduct);
 
 
     }
@@ -230,12 +229,12 @@ public class Health {
     public void setId(Long id) {
         this.id = id;
     }
-    public Long getPoint() {
-        return point;
+    public Long getNumber() {
+        return number;
     }
 
-    public void setPoint(Long point) {
-        this.point = point;
+    public void setNumber(Long number) {
+        this.number = number;
     }
     public String getStatus() {
         return status;
@@ -245,8 +244,8 @@ public class Health {
         this.status = status;
     }
 
-}
 
+}
 ```
 - Entity Pattern 과 Repository Pattern 을 적용하여 JPA 를 통하여 다양한 데이터소스 유형 (RDB or NoSQL) 에 대한 별도의 처리가 없도록 데이터 접근 어댑터를 자동 생성하기 위하여 Spring Data REST 의 RestRepository 를 적용하였다
 ```
@@ -260,14 +259,13 @@ public interface EarnRepository extends PagingAndSortingRepository<Earn, Long>{
 ```
 - 적용 후 REST API 의 테스트
 ```
-# checkIn 서비스의 체크인 처리
-http http://localhost:8081/checkIns smokingAreaId="453!#FEQ"
+# wellbing 서비스의 체크인 처리
+http http://localhost:8081/eats number=3000
 
-# checkIn 서비스의 체크아웃 후 point 서비스의 적립 처리
-http PUT http://localhost:8081/checkIns/1 point=100
+# wellbing 서비스의 체크아웃 후 point 서비스의 적립 처리
+http PUT http://localhost:8081/eats/1 number=3000
 
 # 적립 상태 확인
-http http://localhost:8081/checkIns/1
 http http://localhost:8082/earns/1
 
 ```
@@ -279,20 +277,18 @@ health 서비스에서 die 후 point 서비스에서 포인트적립을 Eventual
 
 ```
     @Autowired
-    HealthRepository HealthRepository;
+    EatRepository eatRepository;
 
     @StreamListener(KafkaProcessor.INPUT)
-    public void wheneverBuryed_Bury(@Payload Buryed buryed){
+    public void wheneverEatEarned_UpdateEat(@Payload EatEarned eatEarned){
 
-        if(buryed.isMe()){
+        if(eatEarned.isMe()){
 
-            Optional<Health> healthOptional = HealthRepository.findById(buryed.getHealthId());
-            Health health = healthOptional.get();
-            health.setPoint(buryed.getPoint());
-            health.setStatus("EARNED");
+            Optional<Eat> eatOptional = eatRepository.findById(eatEarned.getCheckInid());
+            Eat eat = eatOptional.get();
+            eat.setStatus("EARNED");
 
-
-            HealthRepository.save(health);
+            eatRepository.save(eat);
         }
     }
 
@@ -300,17 +296,32 @@ health 서비스에서 die 후 point 서비스에서 포인트적립을 Eventual
 
 ## CQRS
 
-고객관리 서비스(customercenter)의 시나리오인 health 서비스의 포인트 적립 내역을 CQRS로 구현하었고 코드는 다음과 같다:
+고객관리 서비스(customercenter)의 시나리오인 wellbing 서비스의 포인트 적립 내역을 CQRS로 구현하었고 코드는 다음과 같다:
 ```
     @StreamListener(KafkaProcessor.INPUT)
-    public void whenRuned_then_CREATE_3 (@Payload Runed runed) {
+    public void whenBadEaten_then_CREATE_3 (@Payload BadEaten badEaten) {
         try {
-            if (runed.isMe()) {
+            if (badEaten.isMe()) {
                 // view 객체 생성
                 Mypage mypage = new Mypage();
                 // view 객체에 이벤트의 Value 를 set 함
-                mypage.setEarnId(runed.getId());
-                mypage.setPoint(runed.getHealth());
+                mypage.setDeductId(badEaten.getId());
+                mypage.setPoint(badEaten.getPoint());
+                // view 레파지 토리에 save
+                mypageRepository.save(mypage);
+            }
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+    }
+    @StreamListener(KafkaProcessor.INPUT)
+    public void whenGoodEaten_then_CREATE_4 (@Payload GoodEaten goodEaten) {
+        try {
+            if (goodEaten.isMe()) {
+                // view 객체 생성
+                Mypage mypage = new Mypage();
+                // view 객체에 이벤트의 Value 를 set 함
+                mypage.setEatId(goodEaten.getId());
                 // view 레파지 토리에 save
                 mypageRepository.save(mypage);
             }
@@ -322,7 +333,7 @@ health 서비스에서 die 후 point 서비스에서 포인트적립을 Eventual
 
 ## 동기식 호출 과 Fallback 처리
 
-분석단계에서의 조건 중 하나로 포인트결제(pay)->포인트차감(point) 간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
+분석단계에서의 조건 중 하나로 안좋은음식(eat)->포인트차감(point) 간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
 
 - 결제서비스를 호출하기 위하여 Stub과 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현
 
@@ -332,28 +343,27 @@ public interface DeductService {
 
     @RequestMapping(method= RequestMethod.GET, path="/deducts")
     public void pay(@RequestBody Deduct deduct);
-
 }
 ```
 
-- runed 이벤트를 실행시켜 health 어그리게이트에 데이터를 저장한 직후(@PostPersist) 포인트 적립을 요청하도록 처리
+- badeaten 이벤트를 실행시켜 Eat 어그리게이트에 데이터를 저장한 직후(@PostPersist) 포인트 적립을 요청하도록 처리
 
 ```
-@PostPersist
-    public void onPostPersist(){
-        Runed runed = new Runed();
-        BeanUtils.copyProperties(this, runed);
-        runed.publishAfterCommit();
+@PostePersist
+    public void onPostePersist(){
+        BadEaten badEaten = new BadEaten();
+        BeanUtils.copyProperties(this, badEaten);
+        badEaten.publishAfterCommit();
 
         //Following code causes dependency to external APIs
         // it is NOT A GOOD PRACTICE. instead, Event-Policy mapping is recommended.
 
-        nosmoke.external.Earn earn = new nosmoke.external.Earn();
+        nosmokes.external.Deduct deduct = new nosmokes.external.Deduct();
         // mappings goes here
-        earn.setPoint(this.getPoint());
-        earn.setHealthId(this.getId());
-        HealthApplication.applicationContext.getBean(nosmoke.external.EarnService.class)
-            .healthy(earn);
+        deduct.setPoint(this.getNumber());
+        deduct.setPayId(this.getId());
+        WellbingApplication.applicationContext.getBean(nosmokes.external.DeductService.class)
+                .pay(deduct);
 
 
     }
@@ -366,14 +376,14 @@ public interface DeductService {
 # point 서비스를 잠시 내려놓음 (spring-boot:stop)
 
 #health 포인트 적립 처리
-http http://localhost:8083/healths point=100    #Fail
+http http://localhost:8084/eats number=100    #Fail
 
 #point 서비스 재기동
 cd point
 mvn spring-boot:run
 
 #주문처리
-http http://localhost:8083/healths point=100   #Success
+http http://localhost:8084/eats number=100  #Success
 ```
 
 - 또한 과도한 요청시에 서비스 장애가 도미노 처럼 벌어질 수 있다. (서킷브레이커, 폴백 처리는 운영단계에서 설명한다.)
@@ -384,32 +394,33 @@ http http://localhost:8083/healths point=100   #Success
 ## 비동기식 호출 / 시간적 디커플링 / 장애격리 / 최종 (Eventual) 일관성 테스트
 
 
-died 이벤트에 의해 health 포인트 입력이 이루어진 후에 point 서비스로 이를 알려주는 행위는 동기식이 아니라 비 동기식으로 처리하여 point 서비스의 처리를 위하여 체크인/아웃이 블로킹 되지 않아도록 처리한다.
+goodeaten 이벤트에 의해 wellbing 포인트 입력이 이루어진 후에 point 서비스로 이를 알려주는 행위는 동기식이 아니라 비 동기식으로 처리하여 point 서비스의 처리를 위하여 체크인/아웃이 블로킹 되지 않아도록 처리한다.
  
 ```
-    @PostUpdate
-    public void onPostUpdate(){
-        Died died = new Died();
-        BeanUtils.copyProperties(this, died);
-        died.publishAfterCommit();
-
+   @PostPersist
+    public void onPostPersist(){
+        GoodEaten goodEaten = new GoodEaten();
+        BeanUtils.copyProperties(this, goodEaten);
+        goodEaten.publishAfterCommit();
 
     }
 ```
 
-- point 서비스에서는 died 이벤트에 대해서 이를 수신하여 자신의 정책을 처리하도록 PolicyHandler 를 구현한다:
+- point 서비스에서는 goodeaten 이벤트에 대해서 이를 수신하여 자신의 정책을 처리하도록 PolicyHandler 를 구현한다:
 
 ```
-    @Autowired
+     @Autowired
     EarnRepository EarnRepository;
 
     @StreamListener(KafkaProcessor.INPUT)
-    public void wheneverDied_Death(@Payload Died died){
+    public void wheneverGoodEaten_Eat(@Payload GoodEaten goodEaten){
 
-        if(died.isMe()){
+        if(goodEaten.isMe()){
+
             Earn earn = new Earn();
-            earn.setHealthId(died.getId());
-            earn.setPoint(died.getPoint());
+            earn.setCheckInId(goodEaten.getId());
+            earn.setPoint(goodEaten.getNumber());
+            //earn.setStatus(checkOuted.getStatus());
 
             EarnRepository.save(earn);
         }
@@ -417,28 +428,28 @@ died 이벤트에 의해 health 포인트 입력이 이루어진 후에 point �
 
 ```
 
-health 서비스의 run 시스템은 포인트적립/사용과 완전히 분리되어있으며, 이벤트 수신에 따라 처리되기 때문에, point 서비스가 유지보수로 인해 잠시 내려간 상태라도 주문을 받는데 문제가 없다.
+wellbing 서비스의 eat 시스템은 포인트적립/사용과 완전히 분리되어있으며, 이벤트 수신에 따라 처리되기 때문에, point 서비스가 유지보수로 인해 잠시 내려간 상태라도 주문을 받는데 문제가 없다.
 
 ```
 # point 서비스 를 잠시 내려놓음 (ctrl+c)
 
 #체크인/아웃 처리
-http http://health:8080/healths point=1   #Success
+http http://wellbing:8080/eats number=300   #Success
 
 #체크인 포인트 적립 상태 확인
-http http://health:8080/healths/1     # 포인트 적립 상태 안바뀜 확인
+http http://wellbing:8080/eats/1     # 포인트 적립 상태 안바뀜 확인
 
 #point 서비스 기동
 cd point
 mvn spring-boot:run
 
 #체크인 포인트 적립 상태 확인
-http http://health:8080/healths/1     # 모든 체크인 상태가 "EARNED"로 확인
+http http://wellbing:8080/eats/1     # 모든 체크인 상태가 "EARNED"로 확인
 ```
 
 ## Gateway를 통한 진입점 통일
 
-gateway를 통해 checkIn, point, pay, customercenter 등 모든 서비스에 진입할 수 있도록 yaml 파일에 적용
+gateway를 통해 checkIn, point, pay, customercenter,wellbing 등 모든 서비스에 진입할 수 있도록 yaml 파일에 적용
 
 ```
 spring:
@@ -462,8 +473,8 @@ spring:
           uri: http://customercenter:8080
           predicates:
             - Path= /mypages/**
-        - id: health
-          uri: http://health:8080
+        - id: wellbing
+          uri: http://wellbing:8080
           predicates:
             - Path=/healths/** 
       globalcors:
