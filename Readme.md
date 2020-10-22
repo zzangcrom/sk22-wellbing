@@ -541,7 +541,7 @@ customercenter 서비스의 pom.xml에 h2 에서 hsqldb로 dependency 변경
 
 * Tracing Server - Jaeger를 적용하였다. 아래는 18:20 이전 gateway로 동기 호출된 결과에 대해 Trace 결과를 보여주고 있음을 확인 
 
-![image](https://user-images.githubusercontent.com/16397080/96666714-ab002b00-1392-11eb-985a-7f643570ce99.png)
+![image](https://user-images.githubusercontent.com/70302925/96829538-d65b4680-1474-11eb-9e7c-9378fad6017f.png)
 
 
 
