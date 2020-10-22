@@ -18,7 +18,7 @@ CNA 개발에 요구되는 체크포인트를 만족하기 위하여 분석/설�
     - [동기식 호출 과 Fallback 처리](#동기식-호출-과-Fallback-처리)
     - [비동기식 호출 과 Eventual Consistency](#비동기식-호출-과-Eventual-Consistency)
   - [운영](#운영)
-    - [오토스케일 아웃](#오토스케일-아웃)
+    - [서킷브레이크](#서킷브레이크)
     - [Istio 적용](#Istio 적용)
     - [Kiali](#Kiali)
     - [Jaeger](#Jaeger)
@@ -516,30 +516,30 @@ customercenter 서비스의 pom.xml에 h2 에서 hsqldb로 dependency 변경
 
 # 운영
 
-### 오토스케일 아웃
+### 서킷브레이크
 
-* kubectl autoscale deploy pay --min1 --max=10 --cpu-percent=15 -n tutorial로 오토스케일 설정을 완료하여 아래에서 설정된 것을 확인
+* Service time delay를 위해, Thread.sleep 코드 삽입, 타임 설정 후 수행
 
-![image](https://user-images.githubusercontent.com/16397080/96666748-bce1ce00-1392-11eb-8cc9-9e4745e344c0.png)
+![image](https://user-images.githubusercontent.com/70302925/96830715-d5c3af80-1476-11eb-8412-23c1e5cc7da7.png)
 
 
 ## Istio 적용
 
 * Istio 모니터링 툴을 설치하고 istio를 enable 설정한 다음 deploy를 배포하여 각 pod들이side-car pattern으로 생성되어 있는 것을 확인
 
-![image](https://user-images.githubusercontent.com/16397080/96667916-f582a700-1394-11eb-825a-46a6614ac90e.png)
+![image](https://user-images.githubusercontent.com/70302925/96830314-34d4f480-1476-11eb-8ca5-8a765fbe5202.png)
 
 
 ## Kiali
 
-* Monitoring Server - Kiali를 적용하였다. 아래는 18:19부터 1분간 호출된 서비스에 대해 Graph 형식으로 보여지는 모니터링 결과를 확인
+* Monitoring Server - Kiali를 적용하였다.호출된 서비스에 대해 Graph 형식으로 보여지는 모니터링 결과를 확인
 
-![image](https://user-images.githubusercontent.com/16397080/96666770-c53a0900-1392-11eb-80bf-0248fa7cba76.png)
+![image](https://user-images.githubusercontent.com/70302925/96830095-cf810380-1475-11eb-8369-073505348289.png)
 
 
 ## Jaeger
 
-* Tracing Server - Jaeger를 적용하였다. 아래는 18:20 이전 gateway로 동기 호출된 결과에 대해 Trace 결과를 보여주고 있음을 확인 
+* Tracing Server - Jaeger를 적용하였다. gateway로 호출된 결과에 대해 Trace 결과를 보여주고 있음을 확인 
 
 ![image](https://user-images.githubusercontent.com/70302925/96829538-d65b4680-1474-11eb-9e7c-9378fad6017f.png)
 
